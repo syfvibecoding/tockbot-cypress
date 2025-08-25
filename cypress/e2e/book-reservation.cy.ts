@@ -11,7 +11,7 @@ interface Reservation {
 interface Patron {
 	email: string
 	password: string
-	cvv: number
+	cvv: string
 }
 
 interface Booking {
@@ -32,7 +32,8 @@ describe('book reservation', () => {
 		}
 		cy.wrap(patron.email).should('be.ok')
 		cy.wrap(patron.password).should('be.ok')
-		cy.wrap(patron.cvv).should('be.a', 'number')
+		cy.wrap(patron.cvv).should('be.a', 'string')
+		cy.wrap(patron.cvv).should('match', /^[0-9]{3,4}$/)
 
 		reservation = {
 			partySize: Cypress.env('partySize'),
@@ -118,7 +119,7 @@ describe('book reservation', () => {
 				cy.get('iframe[type=cvv]')
 					.its('0.contentDocument.body')
 					.find('#cvv')
-					.type(patron.cvv.toString())
+					.type(patron.cvv)
 			} else {
 				cy.log(':money_with_wings: no deposit required...')	
 			}
