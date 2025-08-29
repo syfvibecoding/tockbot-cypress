@@ -132,8 +132,8 @@ describe('book reservation', () => {
 		if (reservation.dryRun) {
 			return cy.wrap('not booked, dry run mode enabled...')
 		} else {		
-			cy.get('[data-testid="submit-purchase-button"]').click()
-			return cy.get('.Receipt-container--header p', { timeout: 10000 }).then(p => {
+			cy.get('[data-testid="purchase-button"]').click()
+			return cy.get('[data-testid="receipt-confirmation-id"]', { timeout: 10000 }).then(p => {
 				return cy.wrap(`booked! ${p.text()}`)
 			})
 		}
