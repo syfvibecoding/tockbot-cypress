@@ -33,6 +33,6 @@ jobs:
         if: steps.last_status.outputs.last_status != 'success'
       - run: npm ci
         if: steps.last_status.outputs.last_status != 'success'
-      - run: npm start
+      - run: npx cypress run
         if: steps.last_status.outputs.last_status != 'success'
     
