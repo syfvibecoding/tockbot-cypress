@@ -5,10 +5,14 @@ const webhook = webhookUrl ? new IncomingWebhook(webhookUrl) : null;
 Cypress.Commands.overwrite('log', (originalFn, ...msgs) => {
 	if (webhook)
 		msgs.forEach(text => {
-			const payload = text.text ? text : { text }
-			payload.username = Cypress.env('slackUsername')
-			payload.icon_emoji = Cypress.env('slackIconEmoji')
-			webhook.send(payload)
+			try {
+				const payload = text.text ? text : { text }
+				payload.username = Cypress.env('slackUsername')
+				payload.icon_emoji = Cypress.env('slackIconEmoji')
+				webhook.send(payload)
+			} catch (error) {
+				console.error('Failed to send webhook message:', error.message)
+			}
 		})
 	return originalFn(...msgs);
 })
