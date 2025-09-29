@@ -8,7 +8,7 @@ on:
         required: false
         default: 'fuhuihua'
   schedule:
-    - cron: "0/1 * * * *" # every 15 minutes
+    - cron: "35/1 * * * *" # every 1 minutes
 
 jobs:
 
