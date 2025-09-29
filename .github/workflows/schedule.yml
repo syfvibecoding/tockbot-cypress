@@ -35,5 +35,4 @@ jobs:
         if: steps.last_status.outputs.last_status != 'success'
       - run: npm test
         if: steps.last_status.outputs.last_status != 'success'
-      - uses: gautamkrishnar/keepalive-workflow@v1 # because github will kill this after 60 days
     
