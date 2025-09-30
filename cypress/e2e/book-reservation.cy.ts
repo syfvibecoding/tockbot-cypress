@@ -23,9 +23,10 @@ interface Booking {
 }
 
 describe('book reservation', () => {
-	
+
 	let patron: Patron
 	let reservation: Reservation
+	let isAuthenticated: boolean = false
 	
 	before(() => {
 		patron = {
@@ -98,43 +99,66 @@ describe('book reservation', () => {
 			return cy.wrap(null)
 		}
 
-		cy.wrap(days[0]).click()
+		// cy.wrap(days[0]).click()
 		return cy.get(`${tid('search-result-time')} span`).then((results) => {
-			cy.log(`:crossed_fingers: checking ${results.length} slots on ${days[0].ariaLabel} for a match...`)
-			const matchedPreferences = results
-				.filter((i, el) =>
-					reservation.desiredTimeSlots.length === 0 ||
-					reservation.desiredTimeSlots.indexOf(el.innerText) >= 0)
-			if (matchedPreferences.length === 0) {
+			cy.log(`:white_check_mark: found ${results.length} available slots on ${days[0].ariaLabel}, booking first one...`)
+			if (results.length === 0) {
 				if (days.length > 1) {
 					return findMatchingTimeSlot(days.slice(1))
 				} else {
-					cy.log(':disappointed: no matching time slots found on any available days')
+					cy.log(':disappointed: no available time slots found on any available days')
 					return cy.wrap(null)
 				}
 			} else {
 				return cy.wrap({
 					booking: {
 						day: days[0].ariaLabel,
-						time: matchedPreferences[0].innerText
+						time: results[0].innerText
 					},
-					timeSlot: matchedPreferences[0]
+					timeSlot: results[0]
 				})
 			}
 		})
 	}
 
 	function authenticate() {
+		if (isAuthenticated) {
+			cy.log(':white_check_mark: already authenticated, skipping login...')
+			return cy.wrap(true)
+		}
+
 		cy.log(':house: navigating to booking page...')
 		cy.get(tid('email-input')).type(patron.email)
 		cy.get(tid('password-input')).type(patron.password)
 		cy.log(':unlock: logging in...')
-		cy.get(tid('signin')).click()
+		return cy.get(tid('signin')).click().then(() => {
+			// Wait for login to complete by checking for a post-login element
+			return cy.get(tid('consumer-calendar-day'), { timeout: 10000 }).then(() => {
+				isAuthenticated = true
+				cy.log(':white_check_mark: authentication successful and saved')
+				return cy.wrap(true)
+			})
+		})
 	}
 
 	function visit() {
-		const redirect = encodeURIComponent(`${reservation.bookingPage}?size=${reservation.partySize}`)
-		cy.visit(`https://www.exploretock.com/login?continue=${redirect}`)
+		let bookingPath = `${reservation.bookingPage}?size=${reservation.partySize}`
+
+		// If preferred days are available, use the first one and append date parameter
+		if (reservation.desiredDays && reservation.desiredDays.length > 0) {
+			const firstPreferredDay = reservation.desiredDays[0]
+			bookingPath += `&date=${firstPreferredDay}`
+			cy.log(`:calendar: navigating directly to preferred date: ${firstPreferredDay}`)
+		}
+
+		if (isAuthenticated) {
+			cy.log(':fast_forward: already authenticated, going directly to booking page...')
+			const bookingUrl = `https://www.exploretock.com${bookingPath}`
+			cy.visit(bookingUrl)
+		} else {
+			const redirect = encodeURIComponent(bookingPath)
+			cy.visit(`https://www.exploretock.com/login?continue=${redirect}`)
+		}
 	}
 
 	function fillFormFields(timeSlot:HTMLElement) {
@@ -186,43 +210,88 @@ describe('book reservation', () => {
 
 		visit()
 		closeTrusteModal()
-		authenticate()
+		return authenticate().then(() => {
+			// // If preferred days are available, skip calendar search and look for time slots directly
+			// if (reservation.desiredDays && reservation.desiredDays.length > 0) {
+			// 	cy.log(`:dart: skipping calendar search, looking for time slots on ${reservation.desiredDays[0]}`)
 
-		return fetchAvailableDays().then((days) => {
-			if (days.length === 0) {
-				cy.log(':x: no available days found')
-				if (attemptNumber <= reservation.retryAttempts) {
-					cy.log(`:hourglass: waiting ${reservation.retryDelay}ms before retry...`)
-					return cy.wait(reservation.retryDelay).then(() => {
-						return attemptBooking(attemptNumber + 1)
+			// 	// Wait for SearchModal-body to be visible before proceeding
+			// 	return cy.get('.SearchModal-body', { timeout: 5000 }).should('be.visible').then(($modal) => {
+			// 		// Check if reservations have not opened yet within the SearchModal-body
+			// 		if ($modal.text().includes('has not opened reservations')) {
+			// 			cy.log(':clock1: reservations have not opened yet, retrying immediately...')
+			// 			return cy.wait(100).then(() => {
+			// 				return attemptBooking(attemptNumber + 1)
+			// 			})
+			// 		}
+
+			// 		// Reservations are open, look for time slots
+			// 		try {
+			// 			return cy.get(`${tid('search-result-time')} span`, { timeout: 5000 }).should('be.visible').then((results) => {
+			// 				if (results.length === 0) {
+			// 					cy.log(':x: no time slots found on preferred date')
+			// 					if (attemptNumber <= reservation.retryAttempts) {
+			// 						cy.log(`:hourglass: waiting ${reservation.retryDelay}ms before retry (keeping auth session)...`)
+			// 						return cy.wait(reservation.retryDelay).then(() => {
+			// 							return attemptBooking(attemptNumber + 1)
+			// 						})
+			// 					} else {
+			// 						cy.log(':cry: max retry attempts reached, no time slots found')
+			// 						return cy.wrap('no time slots after retries')
+			// 					}
+			// 				}
+
+			// 				cy.log(`:white_check_mark: found ${results.length} available slots on ${reservation.desiredDays[0]}, booking first one...`)
+			// 				const timeSlot = results[0]
+			// 				cy.log(`:white_check_mark: found time slot for ${reservation.desiredDays[0]} @ ${timeSlot.innerText}...`)
+			// 				return fillFormFields(timeSlot).then(() => {
+			// 					return submitBooking()
+			// 				})
+			// 			})
+			// 		} catch (error) {
+			// 			cy.log('Error occured searching for timeslot')
+			// 			return attemptBooking(attemptNumber + 1)
+			// 		}
+			// 	})
+			// } else {
+				// No preferred days, use calendar search
+				return fetchAvailableDays().then((days) => {
+					if (days.length === 0) {
+						cy.log(':x: no available days found')
+						if (attemptNumber <= reservation.retryAttempts) {
+							cy.log(`:hourglass: waiting ${reservation.retryDelay}ms before retry (keeping auth session)...`)
+							return cy.wait(reservation.retryDelay).then(() => {
+								return attemptBooking(attemptNumber + 1)
+							})
+						} else {
+							cy.log(':cry: max retry attempts reached, no availability found')
+							return cy.wrap('no availability after retries')
+						}
+					}
+
+					cy.log(`:raised_hands: found ${days.length} days available for booking...`)
+					return findMatchingTimeSlot(Array.from(days)).then((result) => {
+						if (!result) {
+							cy.log(':disappointed: no matching time slots found')
+							if (attemptNumber <= reservation.retryAttempts) {
+								cy.log(`:hourglass: waiting ${reservation.retryDelay}ms before retry (keeping auth session)...`)
+								return cy.wait(reservation.retryDelay).then(() => {
+									return attemptBooking(attemptNumber + 1)
+								})
+							} else {
+								cy.log(':cry: max retry attempts reached, no matching slots found')
+								return cy.wrap('no matching slots after retries')
+							}
+						}
+
+						const { booking, timeSlot } = result
+						cy.log(`:white_check_mark: found time slot for ${booking.day} @ ${booking.time}...`)
+						return fillFormFields(timeSlot).then(() => {
+							return submitBooking()
+						})
 					})
-				} else {
-					cy.log(':cry: max retry attempts reached, no availability found')
-					return cy.wrap('no availability after retries')
-				}
-			}
-
-			cy.log(`:raised_hands: found ${days.length} days available for booking...`)
-			return findMatchingTimeSlot(Array.from(days))
-		}).then((result) => {
-			if (!result) {
-				cy.log(':disappointed: no matching time slots found')
-				if (attemptNumber <= reservation.retryAttempts) {
-					cy.log(`:hourglass: waiting ${reservation.retryDelay}ms before retry...`)
-					return cy.wait(reservation.retryDelay).then(() => {
-						return attemptBooking(attemptNumber + 1)
-					})
-				} else {
-					cy.log(':cry: max retry attempts reached, no matching slots found')
-					return cy.wrap('no matching slots after retries')
-				}
-			}
-
-			const { booking, timeSlot } = result
-			cy.log(`:white_check_mark: found time slot for ${booking.day} @ ${booking.time}...`)
-			return fillFormFields(timeSlot).then(() => {
-				return submitBooking()
-			})
+				})
+			// }
 		})
 	}
 

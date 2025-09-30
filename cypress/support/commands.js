@@ -3,7 +3,7 @@ const webhookUrl = Cypress.env('slackWebhookUrl');
 const webhook = webhookUrl ? new IncomingWebhook(webhookUrl) : null;
 
 Cypress.Commands.overwrite('log', (originalFn, ...msgs) => {
-	if (webhook)
+	if (webhook && Cypress.env('enableSlackMessages'))
 		msgs.forEach(text => {
 			try {
 				const payload = text.text ? text : { text }
